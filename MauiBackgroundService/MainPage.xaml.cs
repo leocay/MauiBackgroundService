@@ -24,6 +24,7 @@ namespace MauiBackgroundService
             SemanticScreenReader.Announce(CounterBtn.Text);
 
             var intent = new Intent(Android.App.Application.Context, typeof(MauiBackgroundMusic));
+            intent.SetAction("ACTION_PLAY_PAUSE");
             Android.App.Application.Context.StartForegroundService(intent);
         }
     }

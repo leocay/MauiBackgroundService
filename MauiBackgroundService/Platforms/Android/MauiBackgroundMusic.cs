@@ -2,13 +2,16 @@
 using Android.Content;
 using Android.Content.PM;
 using Android.Media;
+using Android.Media.Session;
 using Android.OS;
+using Android.Support.V4.Media.Session;
 using AndroidX.Core.App;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static Android.App.Notification;
 
 namespace MauiBackgroundService.Platforms.Android
 {
@@ -20,11 +23,37 @@ namespace MauiBackgroundService.Platforms.Android
         private const string CHANNEL_ID = "music_service_channel";
         private const int NOTIFICATION_ID = 1001;
         private bool _isPlaying = false;
+        private MediaSessionCompat _mediaSession;
         public override void OnCreate()
         {
+
+
             base.OnCreate();
-            _mediaPlayer = MediaPlayer.Create(this, Resource.Raw.sample_music);
-            _mediaPlayer.Looping = true;
+
+            _mediaSession = new MediaSessionCompat(this, "MediaSessionTag");
+            _mediaSession.SetCallback(new MediaSessionCallback());
+            // Đánh dấu MediaSession là active
+            _mediaSession.Active = true;
+
+            try
+            {
+                _mediaPlayer = MediaPlayer.Create(this, Resource.Raw.sample_music);
+                if (_mediaPlayer == null) throw new Exception("Không thể tạo MediaPlayer");
+                _mediaPlayer.Looping = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠ MediaPlayer Error: {ex.Message}");
+            }
+
+            // Tạo Notification Channel
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            {
+                var channel = new NotificationChannel(CHANNEL_ID, "Music Service", NotificationImportance.High);
+                channel.LockscreenVisibility = NotificationVisibility.Public; // 🔥 Cho phép hiển thị trên màn hình khóa
+                var manager = (NotificationManager)GetSystemService(NotificationService);
+                manager.CreateNotificationChannel(channel);
+            }
 
             // Gọi StartForeground ngay khi Service bắt đầu
             StartForeground(NOTIFICATION_ID, BuildNotification());
@@ -88,7 +117,18 @@ namespace MauiBackgroundService.Platforms.Android
         //        .SetOngoing(true) // Giữ thông báo luôn hiển thị
         //        .Build();
         //}
+        public class MediaSessionCallback : MediaSessionCompat.Callback
+        {
+            public override void OnPlay()
+            {
+                Console.WriteLine("🎵 Nhạc đang phát...");
+            }
 
+            public override void OnPause()
+            {
+                Console.WriteLine("⏸ Nhạc đã tạm dừng!");
+            }
+        }
         private Notification BuildNotification()
         {
             var notificationIntent = new Intent(this, typeof(MainActivity));
@@ -111,7 +151,13 @@ namespace MauiBackgroundService.Platforms.Android
                 .SetContentTitle("Đang phát nhạc")
                 .SetContentText("Ứng dụng đang phát nhạc trong nền.")
                 .SetContentIntent(pendingIntent)
-                .AddAction(icon, text, playPausePendingIntent) // Nút Play/Pause
+                .AddAction(Resource.Drawable.material_ic_menu_arrow_down_black_24dp,"hay", playPausePendingIntent)
+                .AddAction(Resource.Drawable.ic_m3_chip_close,"hay", playPausePendingIntent)
+                .AddAction(Resource.Drawable.ic_m3_chip_close,"hay", playPausePendingIntent)
+                .SetVisibility(NotificationCompat.VisibilityPublic)
+                .SetStyle(new AndroidX.Media.App.NotificationCompat.MediaStyle()?
+                .SetMediaSession(_mediaSession.SessionToken)!
+                .SetShowActionsInCompactView(0))
                 .SetPriority(NotificationCompat.PriorityHigh)
                 .SetOngoing(true)
                 .Build();
